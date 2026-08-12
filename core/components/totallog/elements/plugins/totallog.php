@@ -125,6 +125,18 @@ $snapshot = [
     'body'    => $tlUtf8($tlCut($body, 262144)),
 ];
 
+// Перехват ответа API: без него в журнале «перемещено» стояло бы и там, где сервер
+// отказал. Буферизуем только /api/ (ответ — небольшой JSON), храним первые 8 КБ.
+if (strpos($url, '/api/') === 0) {
+    ob_start(function ($buf) {
+        if (!isset($GLOBALS['totallog_response'])) {
+            $GLOBALS['totallog_response'] = substr($buf, 0, 8192);
+        }
+
+        return $buf;
+    });
+}
+
 $startedFloat = microtime(true);
 $startedAt = date('Y-m-d H:i:s', (int)$startedFloat);
 
@@ -189,6 +201,23 @@ register_shutdown_function(function () use ($modx, $snapshot, $startedFloat, $st
             }
         }
 
+        // Исход запроса. Ответ API мог осесть в нашем буфере (см. ob_start выше)
+        // либо ещё лежать в незакрытом буфере — читаем оба варианта.
+        $success = 1;
+        $resp = isset($GLOBALS['totallog_response']) ? $GLOBALS['totallog_response'] : '';
+        if ($resp === '' && ob_get_level() > 0) {
+            $resp = (string)ob_get_contents();
+        }
+        if ($resp !== '' && ($j = json_decode($resp, true)) && is_array($j) && array_key_exists('success', $j)) {
+            if (!$j['success']) {
+                $success = 0;
+                $msg = isset($j['message']) ? trim((string)$j['message']) : '';
+                $add['description'] = 'НЕ ВЫПОЛНЕНО: '
+                    . (isset($add['description']) && $add['description'] !== '' ? $add['description'] : 'запрос отклонён')
+                    . ($msg !== '' ? ' — ' . $msg : '');
+            }
+        }
+
         $threadId = 0;
         $stmt = $modx->query('SELECT CONNECTION_ID()');
         if ($stmt) {
@@ -211,6 +240,7 @@ register_shutdown_function(function () use ($modx, $snapshot, $startedFloat, $st
             'description'  => '',
             'ip'           => $snapshot['ip'],
             'service'      => $service,
+            'success'      => $success,
             'request'      => $snapshot['request'],
             'body'         => $snapshot['body'],
             'thread_id'    => $threadId,

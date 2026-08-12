@@ -19,6 +19,9 @@
         <!-- Служебное действие (просмотры, options, статистика): пишем, но не показываем
              в пользовательском журнале. Список — в настройке totallog_service_actions -->
         <field key="service" dbtype="tinyint" precision="1" phptype="boolean" null="false" default="0"/>
+        <!-- Исход запроса: 0 = сервер отказал (success:false в ответе API).
+             Без этого журнал показывал бы намерение как свершившийся факт -->
+        <field key="success" dbtype="tinyint" precision="1" phptype="boolean" null="false" default="1"/>
         <field key="request" dbtype="text" phptype="string" null="true"/>
         <field key="body" dbtype="mediumtext" phptype="string" null="true"/>
 
