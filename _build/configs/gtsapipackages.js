@@ -7,8 +7,9 @@ const baseFields = {
     component: { label: 'Компонент', type: 'text', readonly: 1 },
     success: { label: 'OK', type: 'boolean', readonly: 1 },
     description: { label: 'Что произошло', type: 'textarea', readonly: 1 },
-    excel_ids: { label: 'Заказы', type: 'text', readonly: 1 },
-    smens: { label: 'Смены', type: 'text', readonly: 1 },
+    // Динамические поля gtsAPI (excel_ids, raschet_ids, smens) здесь НЕ перечисляем:
+    // их список живёт в _build/configs/data.js и может пополняться прямо на сайте.
+    // В конфиг они попадают триггером gtsapi_rule — TotalLog::ruleTLItem().
 }
 
 export default {
@@ -20,7 +21,7 @@ export default {
                 table: 'TLItem',
                 class: 'TLItem',
                 autocomplete_field: '',
-                version: 5,
+                version: 6,
                 type: 1,
                 authenticated: true,
                 // Не группы, а разрешение MODX — его привозит пакет (permissions.js),
@@ -42,7 +43,6 @@ export default {
                     fields: {
                         ...baseFields,
                         table_name: { label: 'Таблица', type: 'text', readonly: 1 },
-                        raschet_ids: { label: 'Расчёты', type: 'text', readonly: 1 },
                         action: { label: 'Действие', type: 'text', readonly: 1 },
                         method: { label: 'Метод', type: 'text', readonly: 1 },
                         url: { label: 'URL', type: 'text', readonly: 1 },
@@ -65,7 +65,7 @@ export default {
                 table: 'TLItemUser',
                 class: 'TLItem',
                 autocomplete_field: '',
-                version: 5,
+                version: 6,
                 type: 1,
                 authenticated: true,
                 groups: '',
@@ -98,11 +98,13 @@ export default {
                 table: 'modUserTotalLog',
                 class: 'modUser',
                 autocomplete_field: 'modx_user_id',
-                version: 1,
+                version: 2,
                 type: 1,
                 authenticated: true,
                 groups: '',
-                permissions: '',
+                // Справочник людей — не публичный: открываем тем же правом, что и журнал
+                // (в политике «TotalLog Admin» оно тоже есть)
+                permissions: 'totallog_view',
                 active: true,
                 properties: {
                     actions: {

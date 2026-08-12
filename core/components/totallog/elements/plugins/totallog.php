@@ -16,6 +16,8 @@
  *   totallog_days              — срок хранения, дней (по умолчанию 90)
  *   totallog_analyzer_snippet  — сниппет-анализатор (component/table_name/description/excel_ids/raschet_ids/smens)
  *   totallog_skip_urls         — маски URL, которые не логируем (через запятую)
+ *   totallog_log_service       — писать ли служебные действия (totallog_service_actions)
+ *   totallog_log_modx          — писать ли действия менеджера MODX (totallog_modx_actions)
  */
 
 if ($modx->event->name !== 'OnMODXInit') {
@@ -135,6 +137,51 @@ foreach ($_REQUEST as $k => $v) {
     }
 }
 
+/**
+ * Действие против списка масок. Сравнивается полное имя («lusya/calc»), часть после
+ * «/» («calc») и префикс, если запись списка заканчивается на «/» или «*»:
+ * «system/» ловит всю ветку процессоров MODX.
+ */
+$tlMatch = function ($action, $list) {
+    $action = strtolower(trim((string)$action));
+    $list = strtolower(trim((string)$list));
+    if ($action === '' || $list === '') {
+        return false;
+    }
+    $short = strpos($action, '/') !== false ? substr($action, strrpos($action, '/') + 1) : $action;
+    foreach (explode(',', $list) as $mask) {
+        $mask = rtrim(trim($mask), '*');
+        if ($mask === '') {
+            continue;
+        }
+        if (substr($mask, -1) === '/') {
+            if (strpos($action, $mask) === 0) {
+                return true;
+            }
+            continue;
+        }
+        if ($action === $mask || $short === $mask) {
+            return true;
+        }
+    }
+
+    return false;
+};
+
+// Служебное действие? Пишем (нужно для «где тупит»), но пользовательский модуль такое
+// не показывает. Если админ выключил — не пишем вовсе, тогда и разбираться нечего.
+$service = $tlMatch($action, (string)$modx->getOption('totallog_service_actions', null, '')) ? 1 : 0;
+if ($service && !$modx->getOption('totallog_log_service', null, true)) {
+    return;
+}
+
+// Возня менеджера MODX — отдельный рубильник: она нужна для «кто удалил ресурс»,
+// но её много.
+if ($tlMatch($action, (string)$modx->getOption('totallog_modx_actions', null, ''))
+    && !$modx->getOption('totallog_log_modx', null, true)) {
+    return;
+}
+
 $snapshot = [
     'url'     => $tlUtf8($tlCut($url, 500)),
     'method'  => $method,
@@ -166,7 +213,7 @@ $startedAt = date('Y-m-d H:i:s', (int)$startedFloat);
 // фатал-логгер gtsAPI, зарегистрированный на OnHandleRequest).
 $GLOBALS['totallog_reserve'] = str_repeat('x', 262144);
 
-register_shutdown_function(function () use ($modx, $snapshot, $startedFloat, $startedAt, $tlUtf8) {
+register_shutdown_function(function () use ($modx, $snapshot, $startedFloat, $startedAt, $tlUtf8, $service) {
     unset($GLOBALS['totallog_reserve']);
 
     // Цена запроса в базе. Снимаем ДО анализатора и своего INSERT — иначе к запросу
@@ -208,21 +255,6 @@ register_shutdown_function(function () use ($modx, $snapshot, $startedFloat, $st
                 $decoded = json_decode($res, true);
                 if (is_array($decoded)) {
                     $add = $decoded;
-                }
-            }
-        }
-
-        // Служебное действие? Пишем всё, но пользовательский модуль такое не показывает.
-        $service = 0;
-        $serviceList = trim((string)$modx->getOption('totallog_service_actions', null, ''));
-        if ($serviceList !== '' && $snapshot['action'] !== '') {
-            $act = strtolower($snapshot['action']);
-            $short = strpos($act, '/') !== false ? substr($act, strrpos($act, '/') + 1) : $act;
-            foreach (explode(',', strtolower($serviceList)) as $s) {
-                $s = trim($s);
-                if ($s !== '' && ($act === $s || $short === $s)) {
-                    $service = 1;
-                    break;
                 }
             }
         }

@@ -286,6 +286,25 @@ if (preg_match('~^/api/([A-Za-z0-9_]+)~', $url, $m)) {
     $out['table_name'] = (string)$data['table_name'];
 }
 
+// gtsAPI не требует api_action: route() выводит действие из HTTP-метода, и у половины
+// записей поле «Действие» пустовало (PATCH-правки, PUT-создания, DELETE-удаления).
+// Раскладка — как в tableAPIController::route()/route_post().
+if ($action === '' && strpos($url, '/api/') === 0) {
+    $tlByMethod = [
+        'GET'     => 'read',
+        'PUT'     => 'create',
+        'PATCH'   => 'update',
+        'DELETE'  => 'delete',
+        'OPTIONS' => 'options',
+        // route_post: POST без api_action тоже создаёт запись
+        'POST'    => 'create',
+    ];
+    if (isset($tlByMethod[$method])) {
+        $action = $tlByMethod[$method];
+        $out['action'] = $action;
+    }
+}
+
 $method_ = '';
 if ($action !== '' && strpos($action, '/') !== false) {
     // Действие с префиксом пакета: gtsshop/send_zakaz_in_modxpl
@@ -525,7 +544,17 @@ switch ($key) {
 
     // ======================= Всё остальное =======================
     default:
-        if ($action !== '') {
+        // CRUD gtsAPI: «update» в журнале ничего не говорит, а «Изменено в «gsDocOrderLink»» —
+        // говорит. Таблица точнее компонента: в ней и правили.
+        $crudWord = [
+            'create' => 'Создано', 'insert' => 'Создано', 'insert_child' => 'Создано',
+            'update' => 'Изменено', 'copy' => 'Скопировано', 'delete' => 'Удалено',
+            'read' => 'Просмотр', 'options' => 'Просмотр',
+        ];
+        $where = $out['table_name'] !== '' ? $out['table_name'] : $out['component'];
+        if ($action !== '' && isset($crudWord[$action]) && $where !== '') {
+            $out['description'] = $crudWord[$action] . ' в «' . $where . '»';
+        } elseif ($action !== '') {
             $out['description'] = 'Действие: ' . $action;
         } else {
             $wordByMethod = ['PUT' => 'Создано', 'POST' => 'Изменено', 'DELETE' => 'Удалено'];

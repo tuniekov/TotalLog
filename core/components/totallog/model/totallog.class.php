@@ -103,6 +103,114 @@ class TotalLog
         }
     }
     
+    /**
+     * Триггеры gtsAPI. Ключ — КЛАСС таблицы, поэтому одна запись покрывает и
+     * TLItem (админский журнал), и TLItemUser (пользовательский) — класс у них общий.
+     */
+    public function regTriggers()
+    {
+        return [
+            'TLItem' => [
+                'gtsapi_rule' => 'ruleTLItem',
+            ],
+        ];
+    }
+
+    /**
+     * gtsapi_rule: дополняем конфигурацию таблицы динамическими полями gtsAPI.
+     *
+     * Зачем: excel_ids / raschet_ids / smens заданы в _build/configs/data.js и живут
+     * в справочнике gtsAPI — их можно добавить прямо на сайте, руками. Прописывать их
+     * ещё и в gtsapipackages.js значит держать список в двух местах и молча терять
+     * новые поля. Берём список из справочника при каждом чтении конфига.
+     *
+     * gtsAPI сам подставляет такие поля только в таблицу, зарегистрированную в
+     * gtsAPIFieldTable (у нас TLItem) — TLItemUser остаётся без них. И проставляет
+     * их редактируемыми, а журнал только читают.
+     */
+    public function ruleTLItem($params)
+    {
+        $rule = &$params['rule'];
+        if (empty($rule['properties']['fields']) || !is_array($rule['properties']['fields'])) {
+            return $this->success();
+        }
+
+        foreach ($this->dynamicFields() as $name => $field) {
+            if (isset($rule['properties']['fields'][$name])) {
+                // Поле уже подставил gtsAPI (TLItem) — остаётся закрыть на запись
+                $rule['properties']['fields'][$name]['readonly'] = 1;
+                continue;
+            }
+            $rule['properties']['fields'] = $this->insertAfter(
+                $rule['properties']['fields'],
+                $name,
+                $field,
+                $field['after_field']
+            );
+        }
+
+        return $this->success();
+    }
+
+    /**
+     * Динамические поля журнала из справочника gtsAPI: имя → описание поля для конфига.
+     * Порядок — по rank, как задано в data.js.
+     */
+    public function dynamicFields()
+    {
+        $fields = [];
+        try {
+            $this->modx->addPackage('gtsapi', MODX_CORE_PATH . 'components/gtsapi/model/');
+            $c = $this->modx->newQuery('gtsAPIField');
+            $c->innerJoin('gtsAPIFieldGroupLink', 'Link', 'Link.field_id = gtsAPIField.id');
+            $c->innerJoin('gtsAPIFieldGroupTableLink', 'TableLink', 'TableLink.group_field_id = Link.group_field_id');
+            $c->innerJoin('gtsAPIFieldTable', 'FieldTable', 'FieldTable.id = TableLink.table_field_id');
+            $c->where(['FieldTable.name_table' => 'TLItem']);
+            $c->sortby('gtsAPIField.rank', 'ASC');
+            $c->select($this->modx->getSelectColumns('gtsAPIField', 'gtsAPIField')
+                . ', FieldTable.after_field as table_after_field');
+            $c->prepare();
+            $stmt = $this->modx->query($c->toSQL());
+            if (!$stmt) return $fields;
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $name = $row['name'];
+                if ($name === '' || isset($fields[$name])) continue;
+                $fields[$name] = [
+                    'label' => $row['title'] !== '' ? $row['title'] : $name,
+                    'type' => $row['field_type'] !== '' ? $row['field_type'] : 'text',
+                    'readonly' => 1,
+                    'after_field' => $row['after_field'] !== '' ? $row['after_field'] : $row['table_after_field'],
+                ];
+                if (!empty($row['modal_only'])) $fields[$name]['modal_only'] = 1;
+                if (!empty($row['table_only'])) $fields[$name]['table_only'] = 1;
+            }
+        } catch (\Throwable $e) {
+            $this->modx->log(modX::LOG_LEVEL_ERROR, '[TotalLog] dynamicFields: ' . $e->getMessage());
+        }
+
+        return $fields;
+    }
+
+    /**
+     * Вставка поля сразу за указанным. Если якоря нет — в конец.
+     */
+    public function insertAfter($fields, $name, $field, $after)
+    {
+        unset($field['after_field']);
+        if ($after === '' || !isset($fields[$after])) {
+            $fields[$name] = $field;
+
+            return $fields;
+        }
+        $out = [];
+        foreach ($fields as $k => $v) {
+            $out[$k] = $v;
+            if ($k === $after) $out[$name] = $field;
+        }
+
+        return $out;
+    }
+
     public function success($message = "",$data = []){
         return array('success'=>1,'message'=>$message,'data'=>$data);
     }
