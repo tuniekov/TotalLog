@@ -32,6 +32,18 @@ if (!empty($snapshot['request'])) {
     }
 }
 
+// ВАЖНО: фронт PVTables шлёт полезную нагрузку JSON-телом, а в $_REQUEST остаются
+// только 'q' и 'api_action'. Всё интересное (id строки, smena_id, mark, excel_id)
+// лежит именно в body — поэтому работаем по объединённому набору.
+$body = [];
+if (!empty($snapshot['body'])) {
+    $decoded = json_decode($snapshot['body'], true);
+    if (is_array($decoded)) {
+        $body = $decoded;
+    }
+}
+$data = array_merge($request, $body);
+
 $out = [
     'component'   => '',
     'description' => '',
@@ -143,19 +155,19 @@ $tlDets = function (array $ids) use ($modx, $tlHasProd) {
     return $res;
 };
 
-/** Достаём ids так же, как это делает NewSmena::extractIdsFromData */
-$tlIds = function () use ($request) {
+/** Достаём ids так же, как это делает NewSmena::extractIdsFromData (+ id строки из тела) */
+$tlIds = function () use ($data) {
     $ids = [];
-    if (!empty($request['data_fields_values']) && is_array($request['data_fields_values'])) {
-        foreach ($request['data_fields_values'] as $field) {
+    if (!empty($data['data_fields_values']) && is_array($data['data_fields_values'])) {
+        foreach ($data['data_fields_values'] as $field) {
             if (!isset($field['ids'])) continue;
             $v = $field['ids'];
             $ids = array_merge($ids, is_array($v) ? $v : array_map('trim', explode(',', (string)$v)));
         }
     }
     foreach (['ids', 'id', 'link_id'] as $k) {
-        if (!empty($request[$k])) {
-            $v = $request[$k];
+        if (!empty($data[$k])) {
+            $v = $data[$k];
             $ids = array_merge($ids, is_array($v) ? $v : array_map('trim', explode(',', (string)$v)));
         }
     }
@@ -163,8 +175,32 @@ $tlIds = function () use ($request) {
     return array_values(array_unique(array_filter($ids, 'strlen')));
 };
 
+/**
+ * Марки, заказы и смены, которые УЖЕ есть в payload'е — фронт присылает строку целиком.
+ * Это точнее и дешевле похода в базу; в базу идём только если в payload'е пусто.
+ */
+$tlPayloadRows = function () use ($data) {
+    $res = ['marks' => [], 'excel' => [], 'smens' => [], 'rows' => 0];
+    $walk = function ($arr) use (&$walk, &$res) {
+        if (!is_array($arr)) return;
+        $isRow = isset($arr['mark']) || isset($arr['excel_id']) || isset($arr['det_id']);
+        if ($isRow) {
+            $res['rows']++;
+            if (!empty($arr['mark'])) $res['marks'][(string)$arr['mark']] = true;
+            if (!empty($arr['excel_id'])) $res['excel'][(string)$arr['excel_id']] = true;
+            if (!empty($arr['smena_id'])) $res['smens'][(int)$arr['smena_id']] = true;
+        }
+        foreach ($arr as $v) {
+            if (is_array($v)) $walk($v);
+        }
+    };
+    $walk($data);
+
+    return $res;
+};
+
 /** Первое непустое значение по списку ключей (рекурсивно) */
-$pick = function ($keys) use ($request) {
+$pick = function ($keys) use ($data) {
     $walk = function ($arr, $keys) use (&$walk) {
         foreach ($arr as $k => $v) {
             if (is_array($v)) {
@@ -177,11 +213,11 @@ $pick = function ($keys) use ($request) {
         return null;
     };
 
-    return $walk($request, $keys);
+    return $walk($data, $keys);
 };
 
-$val = function ($key, $default = '') use ($request) {
-    return isset($request[$key]) && $request[$key] !== '' ? $request[$key] : $default;
+$val = function ($key, $default = '') use ($data) {
+    return isset($data[$key]) && $data[$key] !== '' ? $data[$key] : $default;
 };
 
 /** Заглавная первая буква. ucfirst() кириллицу не берёт — она многобайтовая. */
@@ -214,6 +250,36 @@ $addSmena = function ($id) use (&$smensOut, $tlSmena) {
     return $label;
 };
 
+/**
+ * Сводка по затронутым строкам: сколько позиций, какие марки, какие заказы.
+ * Сначала берём то, что уже прислал фронт, и только если там пусто — идём в базу.
+ */
+$tlCollect = function () use ($tlIds, $tlDets, $tlPayloadRows, $addSmena) {
+    $p = $tlPayloadRows();
+    foreach (array_keys($p['smens']) as $sid) {
+        $addSmena($sid);
+    }
+
+    $ids = $tlIds();
+    $count = $p['rows'] > 0 ? $p['rows'] : count($ids);
+    $marks = array_keys($p['marks']);
+    $excel = array_keys($p['excel']);
+
+    if (!$marks && $ids) {
+        $d = $tlDets($ids);
+        if ($d['marks'] !== '') $marks = [$d['marks']];
+        if ($d['excel_ids'] !== '') $excel = explode(',', $d['excel_ids']);
+        if ($d['count']) $count = $d['count'];
+    }
+
+    return [
+        'count'     => $count,
+        'marks'     => implode(', ', array_slice($marks, 0, 8))
+            . (count($marks) > 8 ? ' и ещё ' . (count($marks) - 8) : ''),
+        'excel_ids' => implode(',', $excel),
+    ];
+};
+
 $key = $out['component'] . '/' . $method_;
 
 switch ($key) {
@@ -222,8 +288,7 @@ switch ($key) {
     case 'newsmena/set_done':
     case 'newsmena/set_undone':
     case 'newsmena/toggle_done':
-        $ids = $tlIds();
-        $dets = $tlDets($ids);
+        $dets = $tlCollect();
         $what = $method_ === 'set_undone' ? 'снята отметка «выполнено»'
             : ($method_ === 'set_done' ? 'отмечено «выполнено»' : 'переключена отметка «выполнено»');
         $out['description'] = $tlUp($what) . ': ' . $dets['count'] . ' поз.'
@@ -232,8 +297,7 @@ switch ($key) {
         break;
 
     case 'newsmena/move_to_smena':
-        $ids = $tlIds();
-        $dets = $tlDets($ids);
+        $dets = $tlCollect();
         $to = $addSmena($val('smena_id'));
         $out['description'] = 'Перемещено на смену ' . ($to ?: '#' . $val('smena_id'))
             . ': ' . $dets['count'] . ' поз.'
@@ -245,8 +309,7 @@ switch ($key) {
     case 'newsmena/set_rezka_block':
     case 'newsmena/set_rezka_unblock':
     case 'newsmena/toggle_rezka_block':
-        $ids = $tlIds();
-        $dets = $tlDets($ids);
+        $dets = $tlCollect();
         $what = $method_ === 'set_rezka_unblock' ? 'снята блокировка резки'
             : ($method_ === 'set_rezka_block' ? 'поставлена блокировка резки' : 'переключена блокировка резки');
         $out['description'] = $tlUp($what) . ': ' . $dets['count'] . ' поз.'
