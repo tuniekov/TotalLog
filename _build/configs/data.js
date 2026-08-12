@@ -21,6 +21,24 @@ export default {
                     "table_only": 0,
                 },
                 {
+                    // Ид расчётов (gsRaschet), а НЕ номера заказов — номер заказа это excel_id
+                    "title": "Расчёты",
+                    "name": "raschet_ids",
+                    "dbtype": "varchar",
+                    "dbprecision": "191",
+                    "dbnull": 1,
+                    "dbdefault": "",
+                    "dbindex": "INDEX",
+                    "after_field": "excel_ids",
+                    "rank": 2,
+                    "default": "",
+                    "field_type": "text",
+                    "gtsapi_config": "",
+                    "description": "Доп. поля TotalLog",
+                    "modal_only": 0,
+                    "table_only": 0,
+                },
+                {
                     "title": "Смены",
                     "name": "smens",
                     "dbtype": "varchar",
@@ -28,8 +46,8 @@ export default {
                     "dbnull": 1,
                     "dbdefault": "",
                     "dbindex": "no",
-                    "after_field": "excel_ids",
-                    "rank": 2,
+                    "after_field": "raschet_ids",
+                    "rank": 3,
                     "default": "",
                     "field_type": "text",
                     "gtsapi_config": "",
@@ -56,6 +74,10 @@ export default {
                 {
                     group_field_id: { key: "name", table: "gtsAPIFieldGroup", name: "Доп. поля TotalLog" },
                     field_id: { key: "name", table: "gtsAPIField", name: "excel_ids" },
+                },
+                {
+                    group_field_id: { key: "name", table: "gtsAPIFieldGroup", name: "Доп. поля TotalLog" },
+                    field_id: { key: "name", table: "gtsAPIField", name: "raschet_ids" },
                 },
                 {
                     group_field_id: { key: "name", table: "gtsAPIFieldGroup", name: "Доп. поля TotalLog" },

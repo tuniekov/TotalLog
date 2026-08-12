@@ -3,7 +3,7 @@
  * TotalLogAnalyzer — анализатор запроса для TotalLog.
  *
  * Вызывается плагином TotalLog. На входе $snapshot (url, method, action, request, body).
- * Возвращает JSON: component, description, excel_ids, smens.
+ * Возвращает JSON: component, table_name, description, excel_ids, raschet_ids, smens.
  *
  * Задача — писать так, чтобы понял начальник производства: не «POST /api/gcNaryadLink/512»,
  * а «Наряд Резка, смена 12.08.2026: отмечено выполнено 3 детали (заказы 2147, 2142)».
@@ -46,8 +46,10 @@ $data = array_merge($request, $body);
 
 $out = [
     'component'   => '',
+    'table_name'  => '',
     'description' => '',
     'excel_ids'   => '',
+    'raschet_ids' => '',
     'smens'       => '',
 ];
 
@@ -256,17 +258,45 @@ $tlUp = function ($s) {
 };
 
 // ---------------------------------------------------------------------------
-// Компонент
+// Компонент и таблица
 // ---------------------------------------------------------------------------
+
+/** Пакет, которому принадлежит таблица gtsAPI: TLItem → totallog */
+$tlPackage = function ($table) use ($modx) {
+    $table = trim((string)$table);
+    if ($table === '') return '';
+    $name = '';
+    try {
+        if ($t = $modx->getObject('gtsAPITable', ['table' => $table])) {
+            if ($p = $modx->getObject('gtsAPIPackage', (int)$t->get('package_id'))) {
+                $name = (string)$p->get('name');
+            }
+        }
+    } catch (\Throwable $e) {
+    }
+
+    return $name;
+};
+
+// Таблица. У gtsAPI её имя стоит в URL (/api/TLItem/?api_action=options) — это НЕ компонент,
+// таблица живёт внутри пакета. Legacy getTables шлёт имя параметром table_name.
+if (preg_match('~^/api/([A-Za-z0-9_]+)~', $url, $m)) {
+    $out['table_name'] = $m[1];
+} elseif (!empty($data['table_name']) && !is_array($data['table_name'])) {
+    $out['table_name'] = (string)$data['table_name'];
+}
+
 $method_ = '';
 if ($action !== '' && strpos($action, '/') !== false) {
+    // Действие с префиксом пакета: gtsshop/send_zakaz_in_modxpl
     list($out['component'], $method_) = array_pad(explode('/', $action, 2), 2, '');
 } elseif (preg_match('~/assets/components/([A-Za-z0-9_]+)/~', $url, $m)) {
     // Legacy-компоненты: POST на /assets/components/<пакет>/action.php,
     // а имя действия лежит в параметре вида <пакет>_action=moveNaryadDetailToSmena
     $out['component'] = $m[1];
-} elseif (preg_match('~/api/([A-Za-z0-9_]+)~', $url, $m)) {
-    $out['component'] = $m[1];
+} elseif ($out['table_name'] !== '') {
+    // Пакет достаём из справочника gtsAPI, а не из URL
+    $out['component'] = $tlPackage($out['table_name']) ?: $out['table_name'];
 } elseif (preg_match('~^/([A-Za-z0-9_-]+)~', $url, $m)) {
     $out['component'] = $m[1];
 }
@@ -504,7 +534,7 @@ switch ($key) {
             }
         }
         // Обобщённо вытаскиваем заказ и смену, если они есть в запросе
-        $excel = $pick(['excel_id', 'excel_ids', 'order_id', 'sk_order_id', 'raschet_id']);
+        $excel = $pick(['excel_id', 'excel_ids', 'order_id', 'sk_order_id']);
         if ($excel !== null) {
             $out['excel_ids'] = is_array($excel) ? implode(',', $excel) : (string)$excel;
         }
@@ -521,9 +551,25 @@ if ($smensOut) {
     $out['smens'] = implode(', ', array_keys($smensOut));
 }
 
-// Хвост описания: заказы и смены — чтобы строка читалась целиком
+// Расчёт — не заказ. raschet_id это ид расчёта в gsRaschet, а номер заказа лежит
+// в excel_id; раньше расчёты попадали в «Заказы» и путали журнал.
+if ($out['raschet_ids'] === '') {
+    $raschet = $pick(['raschet_id', 'raschet_ids']);
+    if ($raschet !== null) {
+        $out['raschet_ids'] = is_array($raschet) ? implode(',', $raschet) : (string)$raschet;
+    }
+}
+// Правка самого расчёта: POST /api/gsRaschet/508 — ид только в адресе
+if ($out['raschet_ids'] === '' && preg_match('~^/api/gsRaschets?/(\d+)~i', $url, $m)) {
+    $out['raschet_ids'] = $m[1];
+}
+
+// Хвост описания: заказы, расчёты и смены — чтобы строка читалась целиком
 if ($out['excel_ids'] !== '' && stripos($out['description'], 'заказ') === false) {
     $out['description'] .= ' · заказ ' . $out['excel_ids'];
+}
+if ($out['raschet_ids'] !== '' && stripos($out['description'], 'расчёт') === false) {
+    $out['description'] .= ' · расчёт ' . $out['raschet_ids'];
 }
 if ($out['smens'] !== '' && stripos($out['description'], 'смен') === false) {
     $out['description'] .= ' · смена ' . $out['smens'];

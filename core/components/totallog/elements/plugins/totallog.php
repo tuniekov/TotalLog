@@ -14,7 +14,7 @@
  *   totallog_enabled           — рубильник
  *   totallog_log_get           — писать ли GET (по умолчанию нет)
  *   totallog_days              — срок хранения, дней (по умолчанию 90)
- *   totallog_analyzer_snippet  — сниппет-анализатор (component/description/excel_ids/smens)
+ *   totallog_analyzer_snippet  — сниппет-анализатор (component/table_name/description/excel_ids/raschet_ids/smens)
  *   totallog_skip_urls         — маски URL, которые не логируем (через запятую)
  */
 
@@ -32,6 +32,16 @@ if ($method === 'GET' && !$modx->getOption('totallog_log_get', null, false)) {
 }
 
 $url = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
+
+// CLI (крон, ручные скрипты): REQUEST_URI нет, и запись выглядела бы безымянной.
+// Пишем то, что реально запустили — файл с аргументами.
+if ($url === '' && PHP_SAPI === 'cli') {
+    $argv = isset($_SERVER['argv']) && is_array($_SERVER['argv']) ? $_SERVER['argv'] : [];
+    if (!$argv && isset($_SERVER['SCRIPT_FILENAME'])) {
+        $argv = [$_SERVER['SCRIPT_FILENAME']];
+    }
+    $url = implode(' ', $argv);
+}
 
 // Не логируем сами себя и статику
 $skip = trim((string)$modx->getOption('totallog_skip_urls', null, ''));
@@ -159,6 +169,11 @@ $GLOBALS['totallog_reserve'] = str_repeat('x', 262144);
 register_shutdown_function(function () use ($modx, $snapshot, $startedFloat, $startedAt, $tlUtf8) {
     unset($GLOBALS['totallog_reserve']);
 
+    // Цена запроса в базе. Снимаем ДО анализатора и своего INSERT — иначе к запросу
+    // приплюсуются справочники, которые читает сам журнал.
+    $sqlCount = (int)$modx->executedQueries;
+    $sqlTimeMs = (int)round($modx->queryTime * 1000);
+
     // Был ли фатал? Тогда работаем по минимуму: не зовём сниппет-анализатор,
     // чтобы не упасть второй раз и не съесть диагностику gtsAPI.
     $lastError = error_get_last();
@@ -177,7 +192,7 @@ register_shutdown_function(function () use ($modx, $snapshot, $startedFloat, $st
             return;
         }
 
-        // Анализатор: component / description / excel_ids / smens
+        // Анализатор: component / table_name / description / excel_ids / raschet_ids / smens
         $add = [];
         $snippetName = trim((string)$modx->getOption('totallog_analyzer_snippet', null, ''));
         if ($isFatal) {
@@ -237,7 +252,7 @@ register_shutdown_function(function () use ($modx, $snapshot, $startedFloat, $st
 
         $finishedFloat = microtime(true);
 
-        foreach (['description', 'component', 'excel_ids', 'smens'] as $k) {
+        foreach (['description', 'component', 'table_name', 'excel_ids', 'smens', 'raschet_ids'] as $k) {
             if (isset($add[$k])) $add[$k] = $tlUtf8($add[$k]);
         }
 
@@ -248,6 +263,7 @@ register_shutdown_function(function () use ($modx, $snapshot, $startedFloat, $st
             'method'       => $snapshot['method'],
             'action'       => $snapshot['action'],
             'component'    => '',
+            'table_name'   => '',
             'description'  => '',
             'ip'           => $snapshot['ip'],
             'service'      => $service,
@@ -258,6 +274,8 @@ register_shutdown_function(function () use ($modx, $snapshot, $startedFloat, $st
             'created_at'   => $startedAt,
             'finished_at'  => date('Y-m-d H:i:s', (int)$finishedFloat),
             'duration_ms'  => (int)round(($finishedFloat - $startedFloat) * 1000),
+            'sql_count'    => $sqlCount,
+            'sql_time_ms'  => $sqlTimeMs,
         ], $add), '', true, true);
 
         $item->save();

@@ -26,15 +26,22 @@
 
 | Поле | Смысл |
 |---|---|
-| `modx_user_id`, `username` | кто |
-| `url`, `method`, `action` | что дёрнули (`action` — значение поля REQUEST, в имени которого есть «action») |
-| `component` | к какому компоненту относится (заполняет анализатор) |
+| `modx_user_id`, `username` | кто (в UI показывается ФИО — автокомплит `modUserTotalLog` по `modx_user_id`) |
+| `url`, `method`, `action` | что дёрнули (`action` — значение поля REQUEST, в имени которого есть «action»). Для CLI в `url` пишется файл с аргументами |
+| `component` | пакет: из префикса действия (`gtsshop/…`), из `/assets/components/<пакет>/` или из справочника gtsAPI по таблице |
+| `table_name` | таблица: `/api/TLItem` у gtsAPI, параметр `table_name` у legacy getTables |
 | `description` | человекочитаемое описание (заполняет анализатор) |
 | `ip` | откуда |
-| `request`, `body` | payload (обрезаются, чувствительные ключи маскируются) |
+| `request`, `body` | payload (обрезаются, чувствительные ключи маскируются; форма раскладывается в JSON) |
 | `thread_id` | ID соединения MySQL — связка с бинлогом |
 | `created_at`, `finished_at`, `duration_ms` | окно запроса |
-| `excel_ids`, `smens` | доп. поля gtsAPI, задаются в `_build/configs/data.js` |
+| `sql_count`, `sql_time_ms` | цена запроса в базе: сколько SQL и сколько на них ушло |
+| `excel_ids`, `raschet_ids`, `smens` | доп. поля gtsAPI, задаются в `_build/configs/data.js` |
+
+⚠️ `excel_ids` — **номера заказов**, `raschet_ids` — **ид расчётов** (`gsRaschet.id`). Это разные вещи,
+`raschet_id` из запроса в «Заказы» не пишем.
+
+⚠️ Поле `table_name`, а не `table` — по той же причине, что `description` вместо `desc`.
 
 ⚠️ Поле называется `description`, а НЕ `desc` — `DESC` зарезервированное слово MySQL,
 в сыром SQL gtsAPI (`select`, `sortby`) оно ломает запрос.

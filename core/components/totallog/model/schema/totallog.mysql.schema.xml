@@ -13,6 +13,9 @@
         <field key="method" dbtype="varchar" precision="10" phptype="string" null="false" default=""/>
         <field key="action" dbtype="varchar" precision="191" phptype="string" null="false" default=""/>
         <field key="component" dbtype="varchar" precision="100" phptype="string" null="false" default=""/>
+        <!-- Таблица, которую дёрнули: для gtsAPI это часть URL (/api/TLItem), для legacy
+             getTables — параметр table_name. ВНИМАНИЕ: не `table` — зарезервированное слово MySQL -->
+        <field key="table_name" dbtype="varchar" precision="100" phptype="string" null="false" default=""/>
         <!-- ВНИМАНИЕ: поле называется description, а не desc — DESC зарезервированное слово MySQL -->
         <field key="description" dbtype="text" phptype="string" null="true"/>
         <field key="ip" dbtype="varchar" precision="45" phptype="string" null="false" default=""/>
@@ -30,6 +33,10 @@
         <field key="created_at" dbtype="datetime" phptype="datetime" null="true"/>
         <field key="finished_at" dbtype="datetime" phptype="datetime" null="true"/>
         <field key="duration_ms" dbtype="int" precision="10" attributes="unsigned" phptype="integer" null="true" default="0"/>
+        <!-- Цена запроса в базе: сколько запросов и сколько на них ушло. Тяжёлые действия
+             видно без профайлера — по журналу -->
+        <field key="sql_count" dbtype="int" precision="10" attributes="unsigned" phptype="integer" null="true" default="0"/>
+        <field key="sql_time_ms" dbtype="int" precision="10" attributes="unsigned" phptype="integer" null="true" default="0"/>
 
         <index alias="modx_user_id" name="modx_user_id" primary="false" unique="false" type="BTREE">
             <column key="modx_user_id" length="" collation="A" null="false"/>
@@ -48,6 +55,9 @@
         </index>
         <index alias="service" name="service" primary="false" unique="false" type="BTREE">
             <column key="service" length="" collation="A" null="false"/>
+        </index>
+        <index alias="table_name" name="table_name" primary="false" unique="false" type="BTREE">
+            <column key="table_name" length="" collation="A" null="false"/>
         </index>
 
         <aggregate alias="User" class="modUser" local="modx_user_id" foreign="id" cardinality="one" owner="foreign"/>
