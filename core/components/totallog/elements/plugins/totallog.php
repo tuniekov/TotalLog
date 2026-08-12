@@ -51,7 +51,7 @@ $tlMask = function ($data) use (&$tlMask) {
     if (!is_array($data)) {
         return $data;
     }
-    $secret = ['pass', 'password', 'token', 'secret', 'apikey', 'api_key', 'authorization'];
+    $secret = ['pass', 'password', 'token', 'secret', 'apikey', 'api_key', 'auth'];
     $out = [];
     foreach ($data as $k => $v) {
         $lk = strtolower((string)$k);
@@ -103,6 +103,17 @@ if ($method !== 'GET' && strpos($ctype, 'multipart/form-data') === false) {
 }
 if ($body === '' && !empty($_POST)) {
     $body = json_encode($tlMask($_POST), JSON_UNESCAPED_UNICODE);
+}
+// Форма (application/x-www-form-urlencoded) приходит одной строкой вида
+// «action=system%2Fregistry%2Fread&topic=%2Fys%2F…». Раскладываем в JSON: значения
+// раскодируются (%2F → /), поле читается в таблице и в модалке, а анализатор
+// получает параметры структурой — как из JSON-тела.
+if ($body !== '' && strpos($ctype, 'x-www-form-urlencoded') !== false && $body[0] !== '{' && $body[0] !== '[') {
+    $parsed = [];
+    parse_str($body, $parsed);
+    if (!empty($parsed)) {
+        $body = json_encode($tlMask($parsed), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
 }
 
 // action — значение поля, в имени которого содержится "action"
