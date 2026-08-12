@@ -261,10 +261,18 @@ $tlUp = function ($s) {
 $method_ = '';
 if ($action !== '' && strpos($action, '/') !== false) {
     list($out['component'], $method_) = array_pad(explode('/', $action, 2), 2, '');
+} elseif (preg_match('~/assets/components/([A-Za-z0-9_]+)/~', $url, $m)) {
+    // Legacy-компоненты: POST на /assets/components/<пакет>/action.php,
+    // а имя действия лежит в параметре вида <пакет>_action=moveNaryadDetailToSmena
+    $out['component'] = $m[1];
 } elseif (preg_match('~/api/([A-Za-z0-9_]+)~', $url, $m)) {
     $out['component'] = $m[1];
 } elseif (preg_match('~^/([A-Za-z0-9_-]+)~', $url, $m)) {
     $out['component'] = $m[1];
+}
+// Действие без префикса компонента — берём как есть, ключ соберётся из компонента
+if ($method_ === '' && $action !== '' && strpos($action, '/') === false) {
+    $method_ = $action;
 }
 
 // ---------------------------------------------------------------------------
@@ -368,6 +376,7 @@ switch ($key) {
         $nar = $tlNaryad($val('naryad_id'));
         $out['description'] = 'Наряд ' . ($nar ?: '#' . $val('naryad_id'))
             . ' перемещён со смены ' . ($from ?: '?') . ' на ' . ($to ?: '?');
+        $out['excel_ids'] = (string)$val('mark');
         break;
 
     case 'zagruzkatable/moveNaryadDetailToSmena':
@@ -375,8 +384,9 @@ switch ($key) {
         $to = $addSmena($val('target_smena_id'));
         $nar = $tlNaryad($val('naryad_id'));
         $out['description'] = 'Детали наряда ' . ($nar ?: '#' . $val('naryad_id'))
-            . ' перемещены со смены ' . ($from ?: '?') . ' на ' . ($to ?: '?');
-        $out['excel_ids'] = (string)$val('sk_order_id');
+            . ' перемещены со смены ' . ($from ?: '?') . ' на ' . ($to ?: '?')
+            . ($val('move_next_naryads') ? ' (со сдвигом следующих нарядов)' : '');
+        $out['excel_ids'] = (string)$val('sk_order_id', $val('mark'));
         break;
 
     case 'zagruzkatable/copyTabel':
@@ -422,7 +432,7 @@ switch ($key) {
             . ($val('end_date') ? ' по ' . $val('end_date') : '')
             . ($val('mark') ? ', марка ' . $val('mark') : '')
             . ($method_ === 'calc_not_stop' ? ' (без остановки)' : '');
-        $out['excel_ids'] = (string)$val('excel_id', $val('sk_order_id'));
+        $out['excel_ids'] = (string)$val('excel_id', $val('sk_order_id', $val('mark')));
         break;
 
     case 'lusya/add_naryads':

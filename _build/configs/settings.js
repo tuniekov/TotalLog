@@ -37,7 +37,10 @@ export default {
     // Маски URL, которые не логируем (через запятую, подстрокой)
     'skip_urls': {
         'xtype': 'textfield',
-        'value': '/api/totallog,/api/package,/assets/,/favicon',
+        // ⚠️ НЕ ставить сюда '/assets/': legacy-компоненты (ZagruzkaTable, Lusya и др.)
+        // шлют действия на /assets/components/<пакет>/action.php — они бы не логировались.
+        // Статика (css/js/картинки) MODX не бутстрапит, её глушить не надо.
+        'value': '/api/totallog,/api/package,/favicon',
         'area': 'totallog_main',
     },
 }
