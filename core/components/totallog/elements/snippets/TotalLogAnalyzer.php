@@ -172,7 +172,35 @@ $tlIds = function () use ($data) {
         }
     }
 
-    return array_values(array_unique(array_filter($ids, 'strlen')));
+    // Только числовые: в 'ids' прилетают и служебные маркеры строк-итогов (sum_…)
+    $ids = array_filter($ids, function ($v) {
+        return ctype_digit((string)$v) && (int)$v > 0;
+    });
+
+    return array_values(array_unique($ids));
+};
+
+/**
+ * Значение из фильтров таблицы. PrimeVue шлёт их двумя видами:
+ *   filters.<поле>.value
+ *   filters.<поле>.constraints[*].value
+ * Смена при массовых действиях приходит именно так — в самих строках её нет.
+ */
+$tlFilterVal = function ($field) use ($data) {
+    if (empty($data['filters'][$field])) return null;
+    $f = $data['filters'][$field];
+    if (isset($f['value']) && $f['value'] !== '' && !is_array($f['value'])) {
+        return $f['value'];
+    }
+    if (!empty($f['constraints']) && is_array($f['constraints'])) {
+        foreach ($f['constraints'] as $c) {
+            if (isset($c['value']) && $c['value'] !== '' && !is_array($c['value'])) {
+                return $c['value'];
+            }
+        }
+    }
+
+    return null;
 };
 
 /**
@@ -254,10 +282,14 @@ $addSmena = function ($id) use (&$smensOut, $tlSmena) {
  * Сводка по затронутым строкам: сколько позиций, какие марки, какие заказы.
  * Сначала берём то, что уже прислал фронт, и только если там пусто — идём в базу.
  */
-$tlCollect = function () use ($tlIds, $tlDets, $tlPayloadRows, $addSmena) {
+$tlCollect = function () use ($tlIds, $tlDets, $tlPayloadRows, $addSmena, $tlFilterVal) {
     $p = $tlPayloadRows();
     foreach (array_keys($p['smens']) as $sid) {
         $addSmena($sid);
+    }
+    // При массовых действиях смены в строках нет — она в фильтре таблицы
+    if (!$p['smens'] && ($fSmena = $tlFilterVal('smena_id'))) {
+        $addSmena($fSmena);
     }
 
     $ids = $tlIds();
@@ -469,6 +501,8 @@ switch ($key) {
         $smena = $pick(['smena_id', 'smena_ids']);
         if ($smena !== null && !is_array($smena)) {
             $addSmena($smena);
+        } elseif ($fSmena = $tlFilterVal('smena_id')) {
+            $addSmena($fSmena);
         }
         break;
 }
