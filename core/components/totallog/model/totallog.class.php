@@ -15,6 +15,8 @@ class TotalLog
     protected $start = 0;
     protected $time = 0;
     public $gtsShop;
+    /** @var array|null Кэш динамических полей на процесс */
+    protected $dynamicFieldsCache = null;
     public $getTables;
     /**
      * @param modX $modx
@@ -112,8 +114,29 @@ class TotalLog
         return [
             'TLItem' => [
                 'gtsapi_rule' => 'ruleTLItem',
+                'gtsapi_addfields' => 'addFieldsTLItem',
             ],
         ];
+    }
+
+    /**
+     * gtsapi_addfields: закрываем динамические поля на запись.
+     *
+     * Почему не в gtsapi_rule: options() зовёт addFields() ВТОРОЙ раз, уже после
+     * триггера правил, и пересобирает динамические поля заново — readonly, выставленный
+     * раньше, терялся, и в админском журнале «Заказы» открывались на редактирование.
+     * Этот триггер вызывается в конце каждого addFields(), поэтому переживает любой порядок.
+     */
+    public function addFieldsTLItem($params)
+    {
+        $fields = &$params['fields'];
+        foreach (array_keys($this->dynamicFields()) as $name) {
+            if (isset($fields[$name])) {
+                $fields[$name]['readonly'] = 1;
+            }
+        }
+
+        return $this->success();
     }
 
     /**
@@ -158,6 +181,11 @@ class TotalLog
      */
     public function dynamicFields()
     {
+        // Триггеры дёргаются по нескольку раз за запрос (addFields зовут и route_post,
+        // и options) — справочник читаем один раз на процесс.
+        if ($this->dynamicFieldsCache !== null) {
+            return $this->dynamicFieldsCache;
+        }
         $fields = [];
         try {
             $this->modx->addPackage('gtsapi', MODX_CORE_PATH . 'components/gtsapi/model/');
@@ -188,7 +216,7 @@ class TotalLog
             $this->modx->log(modX::LOG_LEVEL_ERROR, '[TotalLog] dynamicFields: ' . $e->getMessage());
         }
 
-        return $fields;
+        return $this->dynamicFieldsCache = $fields;
     }
 
     /**
