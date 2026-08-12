@@ -68,6 +68,20 @@ $tlMask = function ($data) use (&$tlMask) {
 };
 
 /**
+ * Приведение к валидному UTF-8.
+ * В теле запроса могут прийти байты в чужой кодировке — MySQL отвергает такую строку,
+ * и INSERT падает целиком: запрос молча не попадает в журнал. Битые байты выкидываем.
+ */
+$tlUtf8 = function ($str) {
+    $str = (string)$str;
+    if ($str === '' || preg_match('//u', $str)) {
+        return $str;
+    }
+
+    return (string)@iconv('UTF-8', 'UTF-8//IGNORE', $str);
+};
+
+/**
  * Обрезка больших полей — импорт из Excel может прислать мегабайты.
  */
 $tlCut = function ($str, $limit = 65535) {
@@ -101,14 +115,14 @@ foreach ($_REQUEST as $k => $v) {
 }
 
 $snapshot = [
-    'url'     => $tlCut($url, 500),
+    'url'     => $tlUtf8($tlCut($url, 500)),
     'method'  => $method,
-    'action'  => $tlCut($action, 191),
+    'action'  => $tlUtf8($tlCut($action, 191)),
     'ip'      => isset($_SERVER['HTTP_X_FORWARDED_FOR']) && $_SERVER['HTTP_X_FORWARDED_FOR'] !== ''
         ? trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0])
         : (isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : ''),
-    'request' => $tlCut(json_encode($tlMask($_REQUEST), JSON_UNESCAPED_UNICODE)),
-    'body'    => $tlCut($body, 262144),
+    'request' => $tlUtf8($tlCut(json_encode($tlMask($_REQUEST), JSON_UNESCAPED_UNICODE))),
+    'body'    => $tlUtf8($tlCut($body, 262144)),
 ];
 
 $startedFloat = microtime(true);
@@ -119,7 +133,7 @@ $startedAt = date('Y-m-d H:i:s', (int)$startedFloat);
 // фатал-логгер gtsAPI, зарегистрированный на OnHandleRequest).
 $GLOBALS['totallog_reserve'] = str_repeat('x', 262144);
 
-register_shutdown_function(function () use ($modx, $snapshot, $startedFloat, $startedAt) {
+register_shutdown_function(function () use ($modx, $snapshot, $startedFloat, $startedAt, $tlUtf8) {
     unset($GLOBALS['totallog_reserve']);
 
     // Был ли фатал? Тогда работаем по минимуму: не зовём сниппет-анализатор,
@@ -183,9 +197,13 @@ register_shutdown_function(function () use ($modx, $snapshot, $startedFloat, $st
 
         $finishedFloat = microtime(true);
 
+        foreach (['description', 'component', 'excel_ids', 'smens'] as $k) {
+            if (isset($add[$k])) $add[$k] = $tlUtf8($add[$k]);
+        }
+
         $item->fromArray(array_merge([
             'modx_user_id' => (int)$modx->user->id,
-            'username'     => (string)$modx->user->get('username'),
+            'username'     => $tlUtf8((string)$modx->user->get('username')),
             'url'          => $snapshot['url'],
             'method'       => $snapshot['method'],
             'action'       => $snapshot['action'],
