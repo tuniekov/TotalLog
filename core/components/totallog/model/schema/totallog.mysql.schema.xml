@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<model package="totallog" baseClass="xPDOObject" platform="mysql" defaultEngine="InnoDB" phpdoc-package="totallog"
+       version="1.1">
+    <!--
+        TLItem — маркер запроса. Одна строка на каждый обработанный MODX запрос.
+        Пишется плагином TotalLog (OnMODXInit + register_shutdown_function).
+        Доп. поля (excel_ids, smens) добавляются динамически через gtsAPI — см. _build/configs/data.js
+    -->
+    <object class="TLItem" table="totallog_items" extends="xPDOSimpleObject">
+        <field key="modx_user_id" dbtype="int" precision="10" attributes="unsigned" phptype="integer" null="true" default="0"/>
+        <field key="username" dbtype="varchar" precision="100" phptype="string" null="false" default=""/>
+        <field key="url" dbtype="varchar" precision="500" phptype="string" null="false" default=""/>
+        <field key="method" dbtype="varchar" precision="10" phptype="string" null="false" default=""/>
+        <field key="action" dbtype="varchar" precision="191" phptype="string" null="false" default=""/>
+        <field key="component" dbtype="varchar" precision="100" phptype="string" null="false" default=""/>
+        <!-- ВНИМАНИЕ: поле называется description, а не desc — DESC зарезервированное слово MySQL -->
+        <field key="description" dbtype="text" phptype="string" null="true"/>
+        <field key="ip" dbtype="varchar" precision="45" phptype="string" null="false" default=""/>
+        <field key="request" dbtype="text" phptype="string" null="true"/>
+        <field key="body" dbtype="mediumtext" phptype="string" null="true"/>
+
+        <!-- Привязка к бинлогу MySQL: соединение + окно запроса -->
+        <field key="thread_id" dbtype="int" precision="10" attributes="unsigned" phptype="integer" null="true" default="0"/>
+        <field key="created_at" dbtype="datetime" phptype="datetime" null="true"/>
+        <field key="finished_at" dbtype="datetime" phptype="datetime" null="true"/>
+        <field key="duration_ms" dbtype="int" precision="10" attributes="unsigned" phptype="integer" null="true" default="0"/>
+
+        <index alias="modx_user_id" name="modx_user_id" primary="false" unique="false" type="BTREE">
+            <column key="modx_user_id" length="" collation="A" null="false"/>
+        </index>
+        <index alias="action" name="action" primary="false" unique="false" type="BTREE">
+            <column key="action" length="" collation="A" null="false"/>
+        </index>
+        <index alias="component" name="component" primary="false" unique="false" type="BTREE">
+            <column key="component" length="" collation="A" null="false"/>
+        </index>
+        <index alias="created_at" name="created_at" primary="false" unique="false" type="BTREE">
+            <column key="created_at" length="" collation="A" null="false"/>
+        </index>
+        <index alias="thread_id" name="thread_id" primary="false" unique="false" type="BTREE">
+            <column key="thread_id" length="" collation="A" null="false"/>
+        </index>
+
+        <aggregate alias="User" class="modUser" local="modx_user_id" foreign="id" cardinality="one" owner="foreign"/>
+    </object>
+</model>

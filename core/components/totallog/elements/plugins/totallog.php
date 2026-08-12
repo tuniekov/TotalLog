@@ -1,0 +1,212 @@
+<?php
+/**
+ * TotalLog — тотальное логирование запросов MODX.
+ *
+ * Событие: OnMODXInit.
+ *
+ * На входе снимаем запрос и время старта, саму строку пишем в
+ * register_shutdown_function — к этому моменту известны пользователь,
+ * длительность и результат, а thread_id остаётся тем же (одно соединение
+ * на запрос). Для привязки к бинлогу пишем CONNECTION_ID() и окно
+ * created_at..finished_at.
+ *
+ * Настройки:
+ *   totallog_enabled           — рубильник
+ *   totallog_log_get           — писать ли GET (по умолчанию нет)
+ *   totallog_days              — срок хранения, дней (по умолчанию 90)
+ *   totallog_analyzer_snippet  — сниппет-анализатор (component/description/excel_ids/smens)
+ *   totallog_skip_urls         — маски URL, которые не логируем (через запятую)
+ */
+
+if ($modx->event->name !== 'OnMODXInit') {
+    return;
+}
+
+if (!$modx->getOption('totallog_enabled', null, true)) {
+    return;
+}
+
+$method = isset($_SERVER['REQUEST_METHOD']) ? strtoupper($_SERVER['REQUEST_METHOD']) : 'CLI';
+if ($method === 'GET' && !$modx->getOption('totallog_log_get', null, false)) {
+    return;
+}
+
+$url = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
+
+// Не логируем сами себя и статику
+$skip = trim((string)$modx->getOption('totallog_skip_urls', null, ''));
+if ($skip !== '') {
+    foreach (explode(',', $skip) as $mask) {
+        $mask = trim($mask);
+        if ($mask !== '' && strpos($url, $mask) !== false) {
+            return;
+        }
+    }
+}
+
+/**
+ * Маскируем чувствительные значения — в лог не должны попадать пароли и токены.
+ */
+$tlMask = function ($data) use (&$tlMask) {
+    if (!is_array($data)) {
+        return $data;
+    }
+    $secret = ['pass', 'password', 'token', 'secret', 'apikey', 'api_key', 'authorization'];
+    $out = [];
+    foreach ($data as $k => $v) {
+        $lk = strtolower((string)$k);
+        $hit = false;
+        foreach ($secret as $s) {
+            if (strpos($lk, $s) !== false) {
+                $hit = true;
+                break;
+            }
+        }
+        $out[$k] = $hit ? '***' : (is_array($v) ? $tlMask($v) : $v);
+    }
+    return $out;
+};
+
+/**
+ * Обрезка больших полей — импорт из Excel может прислать мегабайты.
+ */
+$tlCut = function ($str, $limit = 65535) {
+    $str = (string)$str;
+    if (strlen($str) <= $limit) {
+        return $str;
+    }
+    return substr($str, 0, $limit) . "\n…[обрезано, было " . strlen($str) . " байт]";
+};
+
+// Тело запроса: для multipart/form-data php://input недоступен — там только $_POST/$_FILES
+$body = '';
+$ctype = isset($_SERVER['CONTENT_TYPE']) ? strtolower($_SERVER['CONTENT_TYPE']) : '';
+if ($method !== 'GET' && strpos($ctype, 'multipart/form-data') === false) {
+    $raw = @file_get_contents('php://input');
+    if ($raw !== false) {
+        $body = $raw;
+    }
+}
+if ($body === '' && !empty($_POST)) {
+    $body = json_encode($tlMask($_POST), JSON_UNESCAPED_UNICODE);
+}
+
+// action — значение поля, в имени которого содержится "action"
+$action = '';
+foreach ($_REQUEST as $k => $v) {
+    if (stripos((string)$k, 'action') !== false && !is_array($v)) {
+        $action = (string)$v;
+        break;
+    }
+}
+
+$snapshot = [
+    'url'     => $tlCut($url, 500),
+    'method'  => $method,
+    'action'  => $tlCut($action, 191),
+    'ip'      => isset($_SERVER['HTTP_X_FORWARDED_FOR']) && $_SERVER['HTTP_X_FORWARDED_FOR'] !== ''
+        ? trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0])
+        : (isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : ''),
+    'request' => $tlCut(json_encode($tlMask($_REQUEST), JSON_UNESCAPED_UNICODE)),
+    'body'    => $tlCut($body, 262144),
+];
+
+$startedFloat = microtime(true);
+$startedAt = date('Y-m-d H:i:s', (int)$startedFloat);
+
+// Резерв памяти: при OOM освобождаем его в самом начале shutdown, чтобы логгер
+// смог доработать и не оборвал цепочку shutdown-функций (после нас идёт
+// фатал-логгер gtsAPI, зарегистрированный на OnHandleRequest).
+$GLOBALS['totallog_reserve'] = str_repeat('x', 262144);
+
+register_shutdown_function(function () use ($modx, $snapshot, $startedFloat, $startedAt) {
+    unset($GLOBALS['totallog_reserve']);
+
+    // Был ли фатал? Тогда работаем по минимуму: не зовём сниппет-анализатор,
+    // чтобы не упасть второй раз и не съесть диагностику gtsAPI.
+    $lastError = error_get_last();
+    $isFatal = $lastError && in_array(
+        $lastError['type'],
+        [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR],
+        true
+    );
+
+    try {
+        $modx->addPackage('totallog', MODX_CORE_PATH . 'components/totallog/model/');
+
+        /** @var TLItem $item */
+        $item = $modx->newObject('TLItem');
+        if (!$item) {
+            return;
+        }
+
+        // Анализатор: component / description / excel_ids / smens
+        $add = [];
+        $snippetName = trim((string)$modx->getOption('totallog_analyzer_snippet', null, ''));
+        if ($isFatal) {
+            $add['description'] = 'FATAL: ' . $lastError['message']
+                . ' в ' . $lastError['file'] . ':' . $lastError['line'];
+            $snippetName = '';
+        }
+        if ($snippetName !== '') {
+            $res = $modx->runSnippet($snippetName, ['snapshot' => $snapshot]);
+            if (is_array($res)) {
+                $add = $res;
+            } elseif (is_string($res) && $res !== '') {
+                $decoded = json_decode($res, true);
+                if (is_array($decoded)) {
+                    $add = $decoded;
+                }
+            }
+        }
+
+        $threadId = 0;
+        $stmt = $modx->query('SELECT CONNECTION_ID()');
+        if ($stmt) {
+            $threadId = (int)$stmt->fetchColumn();
+        }
+
+        $finishedFloat = microtime(true);
+
+        $item->fromArray(array_merge([
+            'modx_user_id' => (int)$modx->user->id,
+            'username'     => (string)$modx->user->get('username'),
+            'url'          => $snapshot['url'],
+            'method'       => $snapshot['method'],
+            'action'       => $snapshot['action'],
+            'component'    => '',
+            'description'  => '',
+            'ip'           => $snapshot['ip'],
+            'request'      => $snapshot['request'],
+            'body'         => $snapshot['body'],
+            'thread_id'    => $threadId,
+            'created_at'   => $startedAt,
+            'finished_at'  => date('Y-m-d H:i:s', (int)$finishedFloat),
+            'duration_ms'  => (int)round(($finishedFloat - $startedFloat) * 1000),
+        ], $add), '', true, true);
+
+        $item->save();
+
+        // Самоочистка раз в сутки — при любом запросе
+        $today = date('Y-m-d');
+        $cacheKey = 'totallog_cleanup_date';
+        $lastClean = $modx->cacheManager->get($cacheKey, ['cache_prefix' => 'totallog/']);
+        if ($lastClean !== $today) {
+            $days = (int)$modx->getOption('totallog_days', null, 90);
+            if ($days > 0) {
+                $cutoff = date('Y-m-d H:i:s', strtotime("-{$days} days"));
+                $table = $modx->getTableName('TLItem');
+                $modx->exec("DELETE FROM {$table} WHERE created_at < '{$cutoff}'");
+            }
+            $modx->cacheManager->set($cacheKey, $today, 0, ['cache_prefix' => 'totallog/']);
+        }
+    } catch (\Throwable $e) {
+        // Лог не должен ронять сайт и не должен обрывать цепочку shutdown-функций:
+        // следом идёт фатал-логгер gtsAPI (OnHandleRequest), он нужнее нашей записи.
+        try {
+            $modx->log(modX::LOG_LEVEL_ERROR, '[TotalLog] ' . $e->getMessage());
+        } catch (\Throwable $e2) {
+            // молча — писать уже некуда
+        }
+    }
+});
