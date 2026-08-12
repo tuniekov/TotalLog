@@ -160,6 +160,21 @@ register_shutdown_function(function () use ($modx, $snapshot, $startedFloat, $st
             }
         }
 
+        // Служебное действие? Пишем всё, но пользовательский модуль такое не показывает.
+        $service = 0;
+        $serviceList = trim((string)$modx->getOption('totallog_service_actions', null, ''));
+        if ($serviceList !== '' && $snapshot['action'] !== '') {
+            $act = strtolower($snapshot['action']);
+            $short = strpos($act, '/') !== false ? substr($act, strrpos($act, '/') + 1) : $act;
+            foreach (explode(',', strtolower($serviceList)) as $s) {
+                $s = trim($s);
+                if ($s !== '' && ($act === $s || $short === $s)) {
+                    $service = 1;
+                    break;
+                }
+            }
+        }
+
         $threadId = 0;
         $stmt = $modx->query('SELECT CONNECTION_ID()');
         if ($stmt) {
@@ -177,6 +192,7 @@ register_shutdown_function(function () use ($modx, $snapshot, $startedFloat, $st
             'component'    => '',
             'description'  => '',
             'ip'           => $snapshot['ip'],
+            'service'      => $service,
             'request'      => $snapshot['request'],
             'body'         => $snapshot['body'],
             'thread_id'    => $threadId,

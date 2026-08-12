@@ -16,6 +16,9 @@
         <!-- ВНИМАНИЕ: поле называется description, а не desc — DESC зарезервированное слово MySQL -->
         <field key="description" dbtype="text" phptype="string" null="true"/>
         <field key="ip" dbtype="varchar" precision="45" phptype="string" null="false" default=""/>
+        <!-- Служебное действие (просмотры, options, статистика): пишем, но не показываем
+             в пользовательском журнале. Список — в настройке totallog_service_actions -->
+        <field key="service" dbtype="tinyint" precision="1" phptype="boolean" null="false" default="0"/>
         <field key="request" dbtype="text" phptype="string" null="true"/>
         <field key="body" dbtype="mediumtext" phptype="string" null="true"/>
 
@@ -39,6 +42,9 @@
         </index>
         <index alias="thread_id" name="thread_id" primary="false" unique="false" type="BTREE">
             <column key="thread_id" length="" collation="A" null="false"/>
+        </index>
+        <index alias="service" name="service" primary="false" unique="false" type="BTREE">
+            <column key="service" length="" collation="A" null="false"/>
         </index>
 
         <aggregate alias="User" class="modUser" local="modx_user_id" foreign="id" cardinality="one" owner="foreign"/>
