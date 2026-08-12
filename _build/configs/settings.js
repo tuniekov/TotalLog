@@ -31,7 +31,7 @@ export default {
     // Через запятую; сравнивается и полное имя, и часть после «/».
     'service_actions': {
         'xtype': 'textfield',
-        'value': 'options,read,get,naryads_table,get_current_smena,get_smena_by_date,get_naryad_orders_info,get_workload_table,getStats_all,getStatOrders,get_dets,recalcTimeTable',
+        'value': 'options,read,get,autocomplete,naryads_table,get_current_smena,get_smena_by_date,get_naryad_orders_info,get_workload_table,getStats_all,getStatOrders,get_dets,recalcTimeTable',
         'area': 'totallog_main',
     },
     // Маски URL, которые не логируем (через запятую, подстрокой)
