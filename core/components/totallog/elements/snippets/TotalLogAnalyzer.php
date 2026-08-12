@@ -184,6 +184,13 @@ $val = function ($key, $default = '') use ($request) {
     return isset($request[$key]) && $request[$key] !== '' ? $request[$key] : $default;
 };
 
+/** Заглавная первая буква. ucfirst() кириллицу не берёт — она многобайтовая. */
+$tlUp = function ($s) {
+    $s = (string)$s;
+
+    return $s === '' ? '' : mb_strtoupper(mb_substr($s, 0, 1, 'UTF-8'), 'UTF-8') . mb_substr($s, 1, null, 'UTF-8');
+};
+
 // ---------------------------------------------------------------------------
 // Компонент
 // ---------------------------------------------------------------------------
@@ -219,7 +226,7 @@ switch ($key) {
         $dets = $tlDets($ids);
         $what = $method_ === 'set_undone' ? 'снята отметка «выполнено»'
             : ($method_ === 'set_done' ? 'отмечено «выполнено»' : 'переключена отметка «выполнено»');
-        $out['description'] = ucfirst($what) . ': ' . $dets['count'] . ' поз.'
+        $out['description'] = $tlUp($what) . ': ' . $dets['count'] . ' поз.'
             . ($dets['marks'] !== '' ? ' — ' . $dets['marks'] : '');
         $out['excel_ids'] = $dets['excel_ids'];
         break;
@@ -242,7 +249,7 @@ switch ($key) {
         $dets = $tlDets($ids);
         $what = $method_ === 'set_rezka_unblock' ? 'снята блокировка резки'
             : ($method_ === 'set_rezka_block' ? 'поставлена блокировка резки' : 'переключена блокировка резки');
-        $out['description'] = ucfirst($what) . ': ' . $dets['count'] . ' поз.'
+        $out['description'] = $tlUp($what) . ': ' . $dets['count'] . ' поз.'
             . ($dets['marks'] !== '' ? ' — ' . $dets['marks'] : '');
         $out['excel_ids'] = $dets['excel_ids'];
         break;
