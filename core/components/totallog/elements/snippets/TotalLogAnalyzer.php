@@ -56,11 +56,27 @@ $out = [
 // ---------------------------------------------------------------------------
 // Доступ к справочникам производства. На сайтах без tSklad просто ничего не резолвим.
 // ---------------------------------------------------------------------------
+// Наличие проверяем ПАПКАМИ, а не попыткой загрузить класс: на сайте без этих
+// пакетов xPDO пишет в лог три строки на каждый запрос («Path specified for package…»,
+// «Could not load class: tSkladSmena») — журнал сам себе создаёт шум.
 $tlHasProd = false;
 try {
-    $modx->addPackage('tsklad', MODX_CORE_PATH . 'components/tsklad/model/');
-    $modx->addPackage('gtsbalance', MODX_CORE_PATH . 'components/gtsbalance/model/');
-    $tlHasProd = (bool)$modx->getFields('tSkladSmena');
+    $tlProdPackages = [
+        'tsklad' => MODX_CORE_PATH . 'components/tsklad/model/',
+        'gtsbalance' => MODX_CORE_PATH . 'components/gtsbalance/model/',
+    ];
+    $tlHasProd = true;
+    foreach ($tlProdPackages as $tlPkg => $tlPath) {
+        if (!is_dir($tlPath)) {
+            $tlHasProd = false;
+            break;
+        }
+    }
+    if ($tlHasProd) {
+        foreach ($tlProdPackages as $tlPkg => $tlPath) {
+            $modx->addPackage($tlPkg, $tlPath);
+        }
+    }
 } catch (\Throwable $e) {
     $tlHasProd = false;
 }
