@@ -10,6 +10,7 @@ import templates from "./configs/templates.js";
 import settings from "./configs/settings.js";
 import gtsapipackages from "./configs/gtsapipackages.js"
 import data from "./configs/data.js";
+import dependencies from "./configs/dependencies.js";
 import resources from "./configs/resources.js";
 import resource_groups from "./configs/resource_groups.js";
 import user_groups from "./configs/user_groups.js";
@@ -48,6 +49,7 @@ form.append('templates', JSON.stringify(templates))
 form.append('settings', JSON.stringify(settings))
 form.append('gtsapipackages', JSON.stringify(gtsapipackages, null, 2))
 form.append('data', JSON.stringify(data, null, 2))
+form.append('dependencies', JSON.stringify(dependencies, null, 2))
 form.append('resources', JSON.stringify(resources, null, 2))
 form.append('resource_groups', JSON.stringify(resource_groups, null, 2))
 form.append('user_groups', JSON.stringify(user_groups, null, 2))

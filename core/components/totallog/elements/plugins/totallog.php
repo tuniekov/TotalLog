@@ -189,6 +189,8 @@ $snapshot = [
     'ip'      => isset($_SERVER['HTTP_X_FORWARDED_FOR']) && $_SERVER['HTTP_X_FORWARDED_FOR'] !== ''
         ? trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0])
         : (isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : ''),
+    // Страница, с которой пришёл запрос: для XHR это адрес интерфейса, где нажали кнопку
+    'referer' => isset($_SERVER['HTTP_REFERER']) ? $tlUtf8($tlCut($_SERVER['HTTP_REFERER'], 500)) : '',
     'request' => $tlUtf8($tlCut(json_encode($tlMask($_REQUEST), JSON_UNESCAPED_UNICODE))),
     'body'    => $tlUtf8($tlCut($body, 262144)),
 ];
@@ -298,6 +300,7 @@ register_shutdown_function(function () use ($modx, $snapshot, $startedFloat, $st
             'table_name'   => '',
             'description'  => '',
             'ip'           => $snapshot['ip'],
+            'referer'      => $snapshot['referer'],
             'service'      => $service,
             'success'      => $success,
             'request'      => $snapshot['request'],

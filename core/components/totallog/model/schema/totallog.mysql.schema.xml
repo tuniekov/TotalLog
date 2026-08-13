@@ -19,6 +19,9 @@
         <!-- ВНИМАНИЕ: поле называется description, а не desc — DESC зарезервированное слово MySQL -->
         <field key="description" dbtype="text" phptype="string" null="true"/>
         <field key="ip" dbtype="varchar" precision="45" phptype="string" null="false" default=""/>
+        <!-- Страница, с которой пришёл запрос (HTTP_REFERER). Для XHR это адрес страницы,
+             где нажали кнопку, — по нему видно, из какого интерфейса пришло действие -->
+        <field key="referer" dbtype="varchar" precision="500" phptype="string" null="true" default=""/>
         <!-- Служебное действие (просмотры, options, статистика): пишем, но не показываем
              в пользовательском журнале. Список — в настройке totallog_service_actions -->
         <field key="service" dbtype="tinyint" precision="1" phptype="boolean" null="false" default="0"/>

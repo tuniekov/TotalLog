@@ -21,7 +21,7 @@ export default {
                 table: 'TLItem',
                 class: 'TLItem',
                 autocomplete_field: '',
-                version: 6,
+                version: 7,
                 type: 1,
                 authenticated: true,
                 // Не группы, а разрешение MODX — его привозит пакет (permissions.js),
@@ -47,6 +47,15 @@ export default {
                         method: { label: 'Метод', type: 'text', readonly: 1 },
                         url: { label: 'URL', type: 'text', readonly: 1 },
                         ip: { label: 'IP', type: 'text', readonly: 1 },
+                        // Ссылка на страницу, с которой пришёл запрос. type html + tpl —
+                        // штатный способ gtsAPI: шаблон прогоняется через pdoTools при чтении.
+                        // Схему в подписи режем, полный адрес остаётся в title.
+                        referer: {
+                            label: 'Откуда',
+                            type: 'html',
+                            tpl: '<a href="{$referer}" target="_blank" rel="noopener noreferrer" title="{$referer}">{$referer | replace : "https://" : "" | replace : "http://" : ""}</a>',
+                            readonly: 1,
+                        },
                         username: { label: 'Логин', type: 'text', readonly: 1, modal_only: 1 },
                         duration_ms: { label: 'Длит., мс', type: 'number', readonly: 1 },
                         sql_count: { label: 'SQL, шт.', type: 'number', readonly: 1 },
@@ -65,7 +74,7 @@ export default {
                 table: 'TLItemUser',
                 class: 'TLItem',
                 autocomplete_field: '',
-                version: 6,
+                version: 7,
                 type: 1,
                 authenticated: true,
                 groups: '',
