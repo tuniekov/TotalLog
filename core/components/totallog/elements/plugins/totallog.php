@@ -28,6 +28,14 @@ if (!$modx->getOption('totallog_enabled', null, true)) {
     return;
 }
 
+// Своя модель на месте? Во время установки и обновления самого пакета файлы
+// перекладываются, и попытка подключить модель сыпет в лог «Path specified for
+// package totallog is not valid» + «Could not load class: TLItem». Один запрос
+// без записи в журнал не потеря, а шум в логе — потеря.
+if (!is_dir(MODX_CORE_PATH . 'components/totallog/model/')) {
+    return;
+}
+
 $method = isset($_SERVER['REQUEST_METHOD']) ? strtoupper($_SERVER['REQUEST_METHOD']) : 'CLI';
 if ($method === 'GET' && !$modx->getOption('totallog_log_get', null, false)) {
     return;
@@ -233,6 +241,11 @@ register_shutdown_function(function () use ($modx, $snapshot, $startedFloat, $st
     );
 
     try {
+        // Повторная проверка: между началом запроса и shutdown пакет мог начать
+        // переустанавливаться
+        if (!is_dir(MODX_CORE_PATH . 'components/totallog/model/')) {
+            return;
+        }
         $modx->addPackage('totallog', MODX_CORE_PATH . 'components/totallog/model/');
 
         /** @var TLItem $item */
