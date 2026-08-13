@@ -15,7 +15,7 @@
 export default {
     // REST-слой и таблицы интерфейса — без него журнал не покажет ничего
     gtsAPI: {
-        version: '1.1.0-beta',
+        version: '1.1.1-beta',
         service_url: 'modstore.pro',
         required: true,
     },
