@@ -14,10 +14,8 @@ class TotalLog
     public $timings = [];
     protected $start = 0;
     protected $time = 0;
-    public $gtsShop;
     /** @var array|null Кэш динамических полей на процесс */
     protected $dynamicFieldsCache = null;
-    public $getTables;
     /**
      * @param modX $modx
      * @param array $config
@@ -41,14 +39,9 @@ class TotalLog
         ], $config);
 
         $this->modx->addPackage('totallog', $this->config['modelPath']);
-        $this->gtsShop = $modx->getService("gtsShop","gtsShop",
-            MODX_CORE_PATH."components/gtsshop/model/",[]);
-        //$this->modx->lexicon->load('totallog:default');
-        $gettables_core_path = $this->modx->getOption('gettables_core_path',null, MODX_CORE_PATH . 'components/gettables/core/');
-        $gettables_core_path = str_replace('[[+core_path]]', MODX_CORE_PATH, $gettables_core_path);
-        if ($this->modx->loadClass('gettables', $gettables_core_path, false, true)) {
-            $this->getTables = new getTables($this->modx, []);
-        }
+        // gtsShop и getTables здесь когда-то поднимались за компанию, копипастой из
+        // соседних компонентов, и ни разу не использовались. На сайте, где gtsShop нет,
+        // это писало «Could not load class: gtsShop» в лог на каждый запрос к журналу.
 
         if ($this->pdo = $this->modx->getService('pdoFetch')) {
             $this->pdo->setConfig($this->config);

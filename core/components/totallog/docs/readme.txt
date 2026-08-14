@@ -37,7 +37,12 @@ id соединения MySQL с окном времени — для разбо
 
 Требования
 ----------
-MODX Revolution 2.8, PHP 7.4+, MySQL 5.7+, компонент gtsAPI.
+MODX Revolution 2.8+, PHP 7.4+, MySQL 5.7+, компонент gtsAPI.
+
+Проверено установкой на чистые сайты:
+  MODX 2.8.9-pl + PHP 7.4 + MySQL 5.7
+  MODX 3.2.3-pl + PHP 8.3 + MySQL 5.7
+  MODX 3.2.3-pl + PHP 8.3 + MySQL 8.2
 
 После установки
 ---------------

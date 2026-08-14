@@ -20,8 +20,16 @@ API, и запуски из консоли.
 
 ## Требования
 
-- MODX Revolution 2.8, PHP 7.4+, MySQL 5.7+;
+- MODX Revolution 2.8+, PHP 7.4+, MySQL 5.7+;
 - компонент **gtsAPI** — на нём держатся REST-слой и таблицы интерфейса.
+
+Проверено установкой на чистые сайты:
+
+| MODX | PHP | MySQL |
+|---|---|---|
+| 2.8.9-pl | 7.4 | 5.7 |
+| 3.2.3-pl | 8.3 | 5.7 |
+| 3.2.3-pl | 8.3 | 8.2 |
 
 ## Установка
 
@@ -54,8 +62,11 @@ npm run build
 не создаются, их заводят руками и вставляют вызов:
 
 ```modx
-{'!mixVue' | snippet : ['app'=>'totallog', 'config'=>['module'=>'TLAll']]}
+[[!mixVue? &app=`totallog` &config=`{"module":"TLAll"}`]]
 ```
+
+`config` — это JSON. Если на сайте включён pdoParser, то же самое пишется и синтаксисом
+Fenom: `{'!mixVue' | snippet : ['app'=>'totallog', 'config'=>['module'=>'TLAll']]}`.
 
 Для своих сайтов: родитель и шаблон пишутся прямо в блоке сайта, id созданных страниц
 попадают в настройки `totallog_p_all` и `totallog_p_user` — ссылаться надо на них, а не на
@@ -72,14 +83,10 @@ npm run build
 Пользовательский модуль настраивается прямо в вызове:
 
 ```modx
-{'!mixVue' | snippet : [
-    'app'=>'totallog',
-    'config'=>[
-        'module'=>'TLUser',
-        'component'=>'newsmena,gcNaryadLink',
-        'title'=>'Кто менял наряды'
-    ]
-]}
+[[!mixVue?
+    &app=`totallog`
+    &config=`{"module":"TLUser","component":"newsmena,gcNaryadLink","title":"Кто менял наряды"}`
+]]
 ```
 
 ## Настройки
